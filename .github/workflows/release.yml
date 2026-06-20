@@ -40,14 +40,21 @@ jobs:
         env:
           DISPATCH_BASE_VERSION: ${{ github.event.inputs.base_version }}
         run: |
+          version_env="$(mktemp)"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             if [ -z "${DISPATCH_BASE_VERSION// }" ]; then
               echo "base_version is required for manual release builds" >&2
               exit 1
             fi
-            eval "$(./scripts/compute-version.sh "$DISPATCH_BASE_VERSION")"
+            bash ./scripts/compute-version.sh "$DISPATCH_BASE_VERSION" > "$version_env"
           else
-            eval "$(./scripts/compute-version.sh)"
+            bash ./scripts/compute-version.sh > "$version_env"
+          fi
+          source "$version_env"
+          if [ -z "${PRODUCT_VERSION:-}" ] || [ -z "${APP_VERSION:-}" ] || [ -z "${FRONTEND_VERSION:-}" ]; then
+            echo "version metadata is incomplete" >&2
+            cat "$version_env" >&2
+            exit 1
           fi
           {
             echo "product_version=${PRODUCT_VERSION}"

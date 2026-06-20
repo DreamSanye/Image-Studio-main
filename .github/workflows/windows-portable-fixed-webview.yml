@@ -35,7 +35,14 @@ jobs:
             echo "base_version is required for manual portable builds" >&2
             exit 1
           fi
-          eval "$(./scripts/compute-version.sh "$DISPATCH_BASE_VERSION")"
+          version_env="$(mktemp)"
+          bash ./scripts/compute-version.sh "$DISPATCH_BASE_VERSION" > "$version_env"
+          source "$version_env"
+          if [ -z "${PRODUCT_VERSION:-}" ] || [ -z "${APP_VERSION:-}" ] || [ -z "${FRONTEND_VERSION:-}" ]; then
+            echo "version metadata is incomplete" >&2
+            cat "$version_env" >&2
+            exit 1
+          fi
           {
             echo "product_version=${PRODUCT_VERSION}"
             echo "app_version=${APP_VERSION}"
@@ -75,7 +82,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: image-studio/frontend/package-lock.json
 
