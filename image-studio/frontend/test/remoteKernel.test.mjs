@@ -698,6 +698,70 @@ test("runRemoteImageJob polls Images API async tasks", async () => {
   });
 });
 
+test("runRemoteImageJob downloads Images API async detail download_url", async () => {
+  const calls = [];
+  await withPatchedGlobals(async () => {
+    globalThis.fetch = async (url, init = {}) => {
+      calls.push({
+        url: String(url),
+        method: init.method || "GET",
+        body: typeof init.body === "string" ? JSON.parse(init.body) : null,
+      });
+      if (String(url).includes("/v1/images/generations")) {
+        return new Response('{"id":"image_task","status":"processing"}', {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (String(url).endsWith("/v1/images/image_task")) {
+        return new Response(
+          '{"id":"image_task","object":"image","status":"completed","detail":{"data":[{"download_url":"https://cdn.example/generated.png"}]}}',
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (String(url) === "https://cdn.example/generated.png") {
+        return new Response(new Uint8Array([112, 110, 103]), {
+          status: 200,
+          headers: { "content-type": "image/png" },
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    };
+  }, async () => {
+    const kernel = await loadRemoteKernel();
+    const result = await kernel.runRemoteImageJob(
+      {
+        payload: {
+          apiKey: "key",
+          mode: "generate",
+          prompt: "bird",
+          size: "1024x1024",
+          quality: "medium",
+          outputFormat: "png",
+          imagePaths: [],
+          imagePath: "",
+          maskB64: "",
+          seed: 0,
+          negativePrompt: "",
+          baseURL: "https://upstream.example",
+          textModelID: "",
+          imageModelID: "gpt-image-2",
+          apiMode: "images",
+          requestPolicy: "openai",
+          imagesAsyncPolling: true,
+          noPromptRevision: false,
+          partialImages: 3,
+        },
+      },
+      { signal: new AbortController().signal },
+    );
+    assert.equal(calls[1].url, "https://upstream.example/v1/images/image_task");
+    assert.equal(calls[2].url, "https://cdn.example/generated.png");
+    assert.equal(result.imageB64, "cG5n");
+    assert.equal(result.sourceEvent, "images_api");
+  });
+});
+
 test("runRemoteImageJob sends Responses API mask as input_image_mask data URL", async () => {
   let captured = null;
   await withPatchedGlobals(async () => {

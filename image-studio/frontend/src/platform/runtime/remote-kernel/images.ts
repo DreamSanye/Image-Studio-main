@@ -87,6 +87,8 @@ type ImagesTaskRef = {
 type ParsedImagesResponse = {
   result?: ExtractedImageResult;
   task?: ImagesTaskRef;
+  imageURL?: string;
+  revisedPrompt?: string;
 };
 
 function taskIDFromParsed(parsed: any): string {
@@ -111,8 +113,19 @@ function isCompletedTaskStatus(status: string): boolean {
 
 function firstImageDatum(parsed: any): any | null {
   if (Array.isArray(parsed?.data) && parsed.data.length > 0) return parsed.data[0];
+  if (parsed?.detail && typeof parsed.detail === "object") return firstImageDatum(parsed.detail);
   if (parsed?.result && typeof parsed.result === "object") return firstImageDatum(parsed.result);
   return null;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
 }
 
 function parseImagesResponseOrTask(raw: string, status: number, allowAsyncTask: boolean): ParsedImagesResponse {
@@ -145,8 +158,9 @@ function parseImagesResponseOrTask(raw: string, status: number, allowAsyncTask: 
     };
   }
   if (first && !first.b64_json) {
-    if (first?.url) {
-      throw new RemoteKernelError("上游返回 URL 而非 b64_json(不支持 response_format),请联系中转站启用 b64_json");
+    const imageURL = String(first.download_url || first.url || "").trim();
+    if (imageURL) {
+      return { imageURL, revisedPrompt: first.revised_prompt || "" };
     }
     throw new RemoteKernelError("上游没有返回可用图片");
   }
@@ -159,6 +173,63 @@ function parseImagesResponseOrTask(raw: string, status: number, allowAsyncTask: 
     throw new RemoteKernelError(`Images API 异步任务失败:${parsed?.status || "failed"}`);
   }
   throw new RemoteKernelError("上游没有返回可用图片");
+}
+
+async function downloadImagesAPIURL(
+  imageURL: string,
+  request: RemoteJobRequest,
+  callbacks: RemoteJobCallbacks,
+  proxyMode: "none" | "custom" | "system",
+  revisedPrompt = "",
+): Promise<ExtractedImageResult> {
+  let parsedURL: URL;
+  try {
+    parsedURL = new URL(imageURL);
+  } catch {
+    throw new RemoteKernelError(`上游返回的图片下载地址无效:${imageURL}`);
+  }
+  if (parsedURL.protocol !== "http:" && parsedURL.protocol !== "https:") {
+    throw new RemoteKernelError(`上游返回的图片下载地址协议不支持:${parsedURL.protocol.replace(/:$/, "")}`);
+  }
+  if (shouldUseAndroidNativeHTTP()) {
+    const response = await nativeHttpRequestText(
+      imageURL,
+      "GET",
+      { Accept: "image/*,*/*" },
+      "",
+      callbacks.signal,
+      undefined,
+      { proxyMode, proxyURL: request.payload.proxyURL || "", responseBodyEncoding: "base64" },
+    );
+    if (response.status < 200 || response.status >= 300) {
+      throw new RemoteKernelError(`下载异步任务图片返回 HTTP ${response.status}`);
+    }
+    return {
+      imageB64: response.body,
+      revisedPrompt,
+      sourceEvent: "images_api",
+    };
+  }
+  if (proxyMode !== "system") {
+    throw new RemoteKernelError("当前远程内核不能控制代理,请切回本地内核或使用 Android 原生运行");
+  }
+  const response = await fetch(imageURL, {
+    method: "GET",
+    headers: { Accept: "image/*,*/*" },
+    signal: callbacks.signal,
+  });
+  if (!response.ok) {
+    throw new RemoteKernelError(`下载异步任务图片返回 HTTP ${response.status}`);
+  }
+  const buffer = await response.arrayBuffer();
+  if (buffer.byteLength === 0) {
+    throw new RemoteKernelError("下载异步任务图片为空");
+  }
+  return {
+    imageB64: bytesToBase64(new Uint8Array(buffer)),
+    revisedPrompt,
+    sourceEvent: "images_api",
+  };
 }
 
 function parseImagesResponse(raw: string, status: number): ExtractedImageResult {
@@ -248,6 +319,11 @@ async function pollImagesTask(
     rawLog += `\n\n--- images-task-${initialTask.id}-poll-${attempt} ---\n${response.raw}`;
     const parsed = parseImagesResponseOrTask(response.raw, response.status, true);
     if (parsed.result) return { result: parsed.result, raw: rawLog };
+    if (parsed.imageURL) {
+      callbacks.onProgress?.("下载 Images API 异步任务图片", nowSeconds(startedAt), 0);
+      const result = await downloadImagesAPIURL(parsed.imageURL, request, callbacks, proxyMode, parsed.revisedPrompt || "");
+      return { result, raw: rawLog };
+    }
     if (!parsed.task) throw new RemoteKernelError("上游没有返回可用图片");
     lastStatus = parsed.task.status;
     if (isFailedTaskStatus(lastStatus)) {
@@ -327,7 +403,10 @@ export async function requestImagesOnce(
       let finalRawPath = rawPath;
       if (!isStream && !result) {
         const parsed = parseImagesResponseOrTask(rawBody, response.status, request.payload.imagesAsyncPolling === true);
-        if (parsed.task) {
+        if (parsed.imageURL) {
+          callbacks.onProgress?.("下载 Images API 异步任务图片", nowSeconds(startedAt), 0);
+          result = await downloadImagesAPIURL(parsed.imageURL, request, callbacks, proxyMode, parsed.revisedPrompt || "");
+        } else if (parsed.task) {
           const polled = await pollImagesTask(request, parsed.task, startedAt, callbacks, proxyMode);
           result = polled.result;
           finalRawPath = registerRawText("images", attempt, `${rawBody}${polled.raw}`);
@@ -403,6 +482,11 @@ export async function requestImagesOnce(
     const parsed = parseImagesResponseOrTask(raw, response.status, request.payload.imagesAsyncPolling === true);
     if (parsed.result) {
       return { ...parsed.result, rawPath, prompt: request.payload.prompt, mode: request.payload.mode };
+    }
+    if (parsed.imageURL) {
+      callbacks.onProgress?.("下载 Images API 异步任务图片", nowSeconds(startedAt), 0);
+      const result = await downloadImagesAPIURL(parsed.imageURL, request, callbacks, proxyMode, parsed.revisedPrompt || "");
+      return { ...result, rawPath, prompt: request.payload.prompt, mode: request.payload.mode };
     }
     if (parsed.task) {
       const polled = await pollImagesTask(request, parsed.task, startedAt, callbacks, proxyMode);

@@ -449,6 +449,7 @@ class AndroidImageStudioBridge(
         val streamLines = payload.optBoolean("streamLines", false)
         val proxyMode = payload.optString("proxyMode", "system")
         val proxyUrl = payload.optString("proxyURL", "")
+        val responseBodyEncoding = payload.optString("responseBodyEncoding", "text")
         thread(name = "image-studio-http-$requestKey") {
             try {
                 val connection = openHttpConnection(url, proxyMode, proxyUrl).apply {
@@ -495,6 +496,9 @@ class AndroidImageStudioBridge(
                         }
                     }
                     bodyBuilder.toString()
+                } else if (responseBodyEncoding.equals("base64", ignoreCase = true)) {
+                    val bytes = stream?.readBytes() ?: ByteArray(0)
+                    Base64.encodeToString(bytes, Base64.NO_WRAP)
                 } else {
                     stream?.bufferedReader()?.use { it.readText() } ?: ""
                 }

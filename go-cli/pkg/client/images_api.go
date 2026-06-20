@@ -101,6 +101,7 @@ func normalizeImageStyle(value string) string {
 type imagesAPIDatum struct {
 	B64JSON       string `json:"b64_json"`
 	URL           string `json:"url"`
+	DownloadURL   string `json:"download_url"`
 	RevisedPrompt string `json:"revised_prompt"`
 }
 
@@ -112,6 +113,7 @@ type imagesAPIResponse struct {
 	Status  string             `json:"status"`
 	Created int                `json:"created"`
 	Data    []imagesAPIDatum   `json:"data"`
+	Detail  *imagesAPIResponse `json:"detail,omitempty"`
 	Result  *imagesAPIResponse `json:"result,omitempty"`
 	Error   *struct {
 		Message string `json:"message"`
@@ -461,6 +463,11 @@ func (r imagesAPIResponse) firstDatum() (imagesAPIDatum, bool) {
 	if len(r.Data) > 0 {
 		return r.Data[0], true
 	}
+	if r.Detail != nil {
+		if d, ok := r.Detail.firstDatum(); ok {
+			return d, true
+		}
+	}
 	if r.Result != nil {
 		return r.Result.firstDatum()
 	}
@@ -470,6 +477,11 @@ func (r imagesAPIResponse) firstDatum() (imagesAPIDatum, bool) {
 func (r imagesAPIResponse) errorMessage() string {
 	if r.Error != nil && strings.TrimSpace(r.Error.Message) != "" {
 		return strings.TrimSpace(r.Error.Message)
+	}
+	if r.Detail != nil {
+		if msg := r.Detail.errorMessage(); msg != "" {
+			return msg
+		}
 	}
 	if r.Result != nil {
 		return r.Result.errorMessage()
@@ -508,18 +520,68 @@ func isImagesTaskFailed(status string) bool {
 	}
 }
 
-func imageResultFromImagesAPIResponse(parsed imagesAPIResponse) (ImageResult, bool, error) {
+func imageResultFromImagesAPIResponse(ctx context.Context, httpClient *http.Client, parsed imagesAPIResponse) (ImageResult, bool, error) {
 	d, ok := parsed.firstDatum()
 	if !ok {
 		return ImageResult{}, false, nil
 	}
 	if d.B64JSON == "" {
-		if d.URL != "" {
-			return ImageResult{}, true, fmt.Errorf("上游返回 URL 而非 b64_json(不支持 response_format),请联系中转站启用 b64_json")
+		imageURL := strings.TrimSpace(d.DownloadURL)
+		if imageURL == "" {
+			imageURL = strings.TrimSpace(d.URL)
+		}
+		if imageURL != "" {
+			result, err := downloadImagesAPIURL(ctx, httpClient, imageURL)
+			if err != nil {
+				return ImageResult{}, true, err
+			}
+			result.RevisedPrompt = d.RevisedPrompt
+			return result, true, nil
 		}
 		return ImageResult{}, true, ErrNoImageInResponse
 	}
 	return imageResultFromImagesDatum(d), true, nil
+}
+
+func downloadImagesAPIURL(ctx context.Context, httpClient *http.Client, imageURL string) (ImageResult, error) {
+	u, err := neturl.Parse(imageURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ImageResult{}, fmt.Errorf("上游返回的图片下载地址无效:%s", imageURL)
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https":
+	default:
+		return ImageResult{}, fmt.Errorf("上游返回的图片下载地址协议不支持:%s", u.Scheme)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil)
+	if err != nil {
+		return ImageResult{}, err
+	}
+	req.Header.Set("Accept", "image/*,*/*")
+	req.Header.Set("User-Agent", UserAgent())
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return ImageResult{}, fmt.Errorf("下载异步任务图片失败:%w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return ImageResult{}, fmt.Errorf("下载异步任务图片返回 HTTP %d", resp.StatusCode)
+	}
+	const maxDownloadBytes = 64 * 1024 * 1024
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadBytes+1))
+	if err != nil {
+		return ImageResult{}, fmt.Errorf("读取异步任务图片失败:%w", err)
+	}
+	if len(data) == 0 {
+		return ImageResult{}, errors.New("下载异步任务图片为空")
+	}
+	if len(data) > maxDownloadBytes {
+		return ImageResult{}, fmt.Errorf("下载异步任务图片超过限制:%dMB", maxDownloadBytes/(1024*1024))
+	}
+	return ImageResult{
+		ImageB64:    base64.StdEncoding.EncodeToString(data),
+		SourceEvent: "images_api",
+	}, nil
 }
 
 func resolveImagesAPIResponse(
@@ -536,7 +598,7 @@ func resolveImagesAPIResponse(
 	if msg := parsed.errorMessage(); msg != "" {
 		return ImageResult{}, fmt.Errorf("上游返回错误:%s", msg)
 	}
-	if result, found, err := imageResultFromImagesAPIResponse(parsed); found || err != nil {
+	if result, found, err := imageResultFromImagesAPIResponse(ctx, httpClient, parsed); found || err != nil {
 		return result, err
 	}
 	status := normalizeImagesTaskStatus(parsed.Status)
@@ -628,7 +690,7 @@ func pollImagesTask(
 		if msg := parsed.errorMessage(); msg != "" {
 			return ImageResult{}, fmt.Errorf("上游轮询返回错误:%s", msg)
 		}
-		if result, found, err := imageResultFromImagesAPIResponse(parsed); found || err != nil {
+		if result, found, err := imageResultFromImagesAPIResponse(ctx, httpClient, parsed); found || err != nil {
 			return result, err
 		}
 		lastStatus = strings.TrimSpace(parsed.Status)
@@ -683,7 +745,7 @@ func parseImagesAPIResponseBytes(raw []byte, statusCode int) (ImageResult, error
 	if parsed.Error != nil {
 		return ImageResult{}, fmt.Errorf("上游返回错误:%s", parsed.Error.Message)
 	}
-	if result, found, err := imageResultFromImagesAPIResponse(parsed); found || err != nil {
+	if result, found, err := imageResultFromImagesAPIResponse(context.Background(), http.DefaultClient, parsed); found || err != nil {
 		return result, err
 	}
 	return ImageResult{}, ErrNoImageInResponse

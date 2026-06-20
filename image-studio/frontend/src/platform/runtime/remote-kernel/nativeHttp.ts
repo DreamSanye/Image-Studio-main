@@ -8,6 +8,7 @@ type NativeProgressWindow = Window & {
 export type NativeHTTPProxyConfig = {
   proxyMode?: string;
   proxyURL?: string;
+  responseBodyEncoding?: "text" | "base64";
 };
 
 const nativeHttpProgressHandlers = new Map<string, (payload: unknown) => void>();
@@ -100,6 +101,7 @@ export async function nativeHttpRequestText(
       streamLines: Boolean(onStreamPayload),
       proxyMode: proxyConfig?.proxyMode || "system",
       proxyURL: proxyConfig?.proxyURL || "",
+      responseBodyEncoding: proxyConfig?.responseBodyEncoding || "text",
     });
     if (aborted) throw new DOMException("Aborted", "AbortError");
     return response;

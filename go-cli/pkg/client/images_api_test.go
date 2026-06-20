@@ -399,3 +399,57 @@ func TestRequestImagesAPIAsyncPolling(t *testing.T) {
 		t.Fatalf("raw log missing poll marker: %s", raw.String())
 	}
 }
+
+func TestRequestImagesAPIAsyncPollingDownloadsDetailURL(t *testing.T) {
+	imageBytes := []byte("png-bytes")
+	expectedB64 := base64.StdEncoding.EncodeToString(imageBytes)
+	originalInterval := ImagesTaskPollIntervalSecond
+	ImagesTaskPollIntervalSecond = 0
+	t.Cleanup(func() { ImagesTaskPollIntervalSecond = originalInterval })
+
+	pollHits := 0
+	imageHits := 0
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/images/generations":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"id":"image_task","object":"image","status":"processing"}`)
+		case "/v1/images/image_task":
+			pollHits++
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"id":"image_task","object":"image","status":"completed","detail":{"data":[{"download_url":%q}]}}`, srv.URL+"/download/generated.png")
+		case "/download/generated.png":
+			imageHits++
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write(imageBytes)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	var raw bytes.Buffer
+	res, err := RequestImagesAPIWithPartial(context.Background(), Options{
+		APIKey:             "sk-test",
+		Prompt:             "cat",
+		BaseURL:            srv.URL,
+		APIMode:            APIModeImages,
+		ImagesAsyncPolling: true,
+	}, &raw, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pollHits != 1 {
+		t.Fatalf("pollHits = %d, want 1", pollHits)
+	}
+	if imageHits != 1 {
+		t.Fatalf("imageHits = %d, want 1", imageHits)
+	}
+	if res.ImageB64 != expectedB64 {
+		t.Fatalf("ImageB64 = %q, want %q", res.ImageB64, expectedB64)
+	}
+	if !strings.Contains(raw.String(), `"download_url"`) {
+		t.Fatalf("raw log missing download_url response: %s", raw.String())
+	}
+}
