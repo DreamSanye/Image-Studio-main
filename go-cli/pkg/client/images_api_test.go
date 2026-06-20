@@ -366,6 +366,7 @@ func TestRequestImagesAPIAsyncPolling(t *testing.T) {
 				return
 			}
 			if pollHits == 2 {
+				w.Header().Set("Content-Length", "10")
 				return
 			}
 			fmt.Fprintf(w, `{"id":"task_abc","status":"completed","data":[{"b64_json":%q,"revised_prompt":"done"}]}`, finalB64)

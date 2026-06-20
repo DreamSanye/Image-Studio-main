@@ -323,7 +323,13 @@ async function pollImagesTask(
         : "Images API 异步任务轮询超时");
     }
     callbacks.onProgress?.(lastStatus ? `Images API 异步任务处理中:${lastStatus}` : "Images API 异步任务处理中", nowSeconds(startedAt), 0);
-    const response = await requestImagesTaskStatus(taskURL, request, callbacks, proxyMode);
+    let response: Awaited<ReturnType<typeof requestImagesTaskStatus>>;
+    try {
+      response = await requestImagesTaskStatus(taskURL, request, callbacks, proxyMode);
+    } catch (error) {
+      callbacks.onProgress?.(`Images API 异步任务轮询请求失败，继续等待:${(error as any)?.message || error}`, nowSeconds(startedAt), 0);
+      continue;
+    }
     rawLog += `\n\n--- images-task-${initialTask.id}-poll-${attempt} ---\n${response.raw}`;
     if (!response.raw.trim()) {
       if (response.status < 200 || response.status >= 300) {

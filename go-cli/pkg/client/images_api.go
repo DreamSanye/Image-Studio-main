@@ -670,7 +670,10 @@ func pollImagesTask(
 		req.Header.Set("User-Agent", UserAgent())
 		resp, err := httpClient.Do(req)
 		if err != nil {
-			return ImageResult{}, err
+			if onProgress != nil {
+				onProgress("Images API 异步任务轮询请求失败，继续等待:"+err.Error(), int(time.Since(startedAt).Seconds()), 0)
+			}
+			continue
 		}
 		raw, readErr := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
@@ -678,7 +681,13 @@ func pollImagesTask(
 			return ImageResult{}, writeErr
 		}
 		if readErr != nil {
-			return ImageResult{}, fmt.Errorf("读取 Images API 异步任务响应失败:%w", readErr)
+			if resp.StatusCode/100 != 2 {
+				return ImageResult{}, fmt.Errorf("读取 Images API 异步任务响应失败:%w", readErr)
+			}
+			if onProgress != nil {
+				onProgress("Images API 异步任务响应读取中断，继续等待:"+readErr.Error(), int(time.Since(startedAt).Seconds()), 0)
+			}
+			continue
 		}
 		if len(bytes.TrimSpace(raw)) == 0 {
 			if resp.StatusCode/100 != 2 {
