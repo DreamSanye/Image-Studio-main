@@ -1,7 +1,6 @@
 name: Release
 
-# Build desktop targets in parallel and produce Android APKs for phone and pad
-# shells from the bundled WebView wrapper in `android-shell/`.
+# Build Windows, macOS, and Android release artifacts.
 
 on:
   push:
@@ -86,18 +85,6 @@ jobs:
             artifact_suffix: macos-universal.zip
             wails_args: ""
             package_cmd: ditto -c -k --sequesterRsrc --keepParent "image-studio/build/bin/Image Studio.app" "$artifact_path"
-          - id: linux-amd64
-            runner: ubuntu-24.04
-            goos: linux
-            artifact_suffix: linux-amd64.tar.gz
-            wails_args: -platform linux/amd64 -clean -tags webkit2_41
-            package_cmd: tar -C image-studio/build/bin -czf "$artifact_path" image-studio
-          - id: linux-arm64
-            runner: ubuntu-24.04-arm
-            goos: linux
-            artifact_suffix: linux-arm64.tar.gz
-            wails_args: -platform linux/arm64 -clean -tags webkit2_41
-            package_cmd: tar -C image-studio/build/bin -czf "$artifact_path" image-studio
 
     steps:
       - name: Checkout
@@ -113,7 +100,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: image-studio/frontend/package-lock.json
 
@@ -478,7 +465,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: image-studio/frontend/package-lock.json
 
@@ -551,6 +538,7 @@ jobs:
     name: Build Gio ${{ matrix.id }}
     runs-on: ${{ matrix.runner }}
     needs: prepare-version
+    if: ${{ vars.IMAGE_STUDIO_BUILD_GIO == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -677,7 +665,6 @@ jobs:
       - build-windows-msix
       - build-windows-msixbundle
       - build-android-apk
-      - build-gio-desktop
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Download all artifacts
