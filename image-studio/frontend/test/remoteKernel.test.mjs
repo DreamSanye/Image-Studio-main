@@ -714,6 +714,13 @@ test("runRemoteImageJob downloads Images API async detail download_url", async (
         });
       }
       if (String(url).endsWith("/v1/images/image_task")) {
+        const imagePolls = calls.filter((call) => call.url.endsWith("/v1/images/image_task")).length;
+        if (imagePolls === 1) {
+          return new Response(
+            '{"id":"image_task","object":"image","status":"completed"}',
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
         return new Response(
           '{"id":"image_task","object":"image","status":"completed","detail":{"data":[{"download_url":"https://cdn.example/generated.png"}]}}',
           { status: 200, headers: { "content-type": "application/json" } },
@@ -756,7 +763,8 @@ test("runRemoteImageJob downloads Images API async detail download_url", async (
       { signal: new AbortController().signal },
     );
     assert.equal(calls[1].url, "https://upstream.example/v1/images/image_task");
-    assert.equal(calls[2].url, "https://cdn.example/generated.png");
+    assert.equal(calls[2].url, "https://upstream.example/v1/images/image_task");
+    assert.equal(calls[3].url, "https://cdn.example/generated.png");
     assert.equal(result.imageB64, "cG5n");
     assert.equal(result.sourceEvent, "images_api");
   });

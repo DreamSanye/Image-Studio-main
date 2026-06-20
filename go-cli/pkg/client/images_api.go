@@ -605,15 +605,16 @@ func resolveImagesAPIResponse(
 	if isImagesTaskFailed(status) {
 		return ImageResult{}, fmt.Errorf("Images API 异步任务失败:%s", parsed.Status)
 	}
-	if isImagesTaskComplete(status) {
-		return ImageResult{}, ErrNoImageInResponse
-	}
 	taskID := parsed.taskIdentifier()
 	if !allowAsync || taskID == "" {
 		return ImageResult{}, ErrNoImageInResponse
 	}
 	if onProgress != nil {
-		onProgress("Images API 已提交异步任务，等待结果", int(time.Since(startedAt).Seconds()), 0)
+		stage := "Images API 已提交异步任务，等待结果"
+		if isImagesTaskComplete(status) {
+			stage = "Images API 异步任务已完成，等待图片结果写入"
+		}
+		onProgress(stage, int(time.Since(startedAt).Seconds()), 0)
 	}
 	return pollImagesTask(ctx, httpClient, baseURL, apiKey, taskID, rawSink, onProgress, startedAt)
 }
@@ -634,8 +635,13 @@ func pollImagesTask(
 	}
 	deadline := time.Now().Add(timeout)
 	interval := time.Duration(ImagesTaskPollIntervalSecond) * time.Second
+	completedResultGrace := time.Duration(ImagesTaskCompletedResultGraceSecond) * time.Second
+	if completedResultGrace <= 0 {
+		completedResultGrace = 2 * time.Minute
+	}
 	pollURL := baseURL + "/v1/images/" + neturl.PathEscape(taskID)
 	var lastStatus string
+	var completedWithoutResultSince time.Time
 	for attempt := 1; ; attempt++ {
 		if attempt > 1 && interval > 0 {
 			if !sleepCtx(ctx, interval) {
@@ -698,8 +704,18 @@ func pollImagesTask(
 			return ImageResult{}, fmt.Errorf("Images API 异步任务失败:%s", lastStatus)
 		}
 		if isImagesTaskComplete(lastStatus) {
+			if completedWithoutResultSince.IsZero() {
+				completedWithoutResultSince = time.Now()
+			}
+			if time.Since(completedWithoutResultSince) <= completedResultGrace {
+				if onProgress != nil {
+					onProgress("Images API 异步任务已完成，等待图片结果写入", int(time.Since(startedAt).Seconds()), 0)
+				}
+				continue
+			}
 			return ImageResult{}, ErrNoImageInResponse
 		}
+		completedWithoutResultSince = time.Time{}
 		if !isImagesTaskPending(lastStatus) {
 			return ImageResult{}, fmt.Errorf("Images API 异步任务状态未知:%s", lastStatus)
 		}

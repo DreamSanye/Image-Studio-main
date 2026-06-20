@@ -19,6 +19,7 @@ import {
 
 const IMAGES_TASK_POLL_INTERVAL_MS = 3_000;
 const IMAGES_TASK_POLL_TIMEOUT_MS = 30 * 60_000;
+const IMAGES_TASK_COMPLETED_RESULT_GRACE_MS = 120_000;
 
 function parseSSEEvent(line: string): any | null {
   const stripped = line.trim();
@@ -166,7 +167,7 @@ function parseImagesResponseOrTask(raw: string, status: number, allowAsyncTask: 
   }
   const taskID = taskIDFromParsed(parsed);
   const taskStatus = normalizeTaskStatus(parsed?.status);
-  if (allowAsyncTask && taskID && !isFailedTaskStatus(taskStatus) && !isCompletedTaskStatus(taskStatus)) {
+  if (allowAsyncTask && taskID && !isFailedTaskStatus(taskStatus)) {
     return { task: { id: taskID, status: taskStatus } };
   }
   if (isFailedTaskStatus(taskStatus)) {
@@ -307,6 +308,7 @@ async function pollImagesTask(
   const taskURL = `${normalizeBaseURL(request.payload.baseURL)}/v1/images/${encodeURIComponent(initialTask.id)}`;
   let rawLog = `\n\n--- images-task-${initialTask.id}-submitted ---\n${JSON.stringify(initialTask)}\n`;
   let lastStatus = initialTask.status;
+  let completedWithoutResultSince = 0;
   for (let attempt = 1; ; attempt++) {
     if (attempt > 1) await sleepWithSignal(callbacks.signal, IMAGES_TASK_POLL_INTERVAL_MS);
     if (Date.now() > deadline) {
@@ -330,8 +332,14 @@ async function pollImagesTask(
       throw new RemoteKernelError(`Images API 异步任务失败:${lastStatus}`);
     }
     if (isCompletedTaskStatus(lastStatus)) {
+      if (!completedWithoutResultSince) completedWithoutResultSince = Date.now();
+      if (Date.now() - completedWithoutResultSince <= IMAGES_TASK_COMPLETED_RESULT_GRACE_MS) {
+        callbacks.onProgress?.("Images API 异步任务已完成，等待图片结果写入", nowSeconds(startedAt), 0);
+        continue;
+      }
       throw new RemoteKernelError("Images API 异步任务已完成但没有返回可用图片");
     }
+    completedWithoutResultSince = 0;
     if (!isPendingTaskStatus(lastStatus)) {
       throw new RemoteKernelError(`Images API 异步任务状态未知:${lastStatus}`);
     }

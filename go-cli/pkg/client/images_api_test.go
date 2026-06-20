@@ -418,6 +418,10 @@ func TestRequestImagesAPIAsyncPollingDownloadsDetailURL(t *testing.T) {
 		case "/v1/images/image_task":
 			pollHits++
 			w.Header().Set("Content-Type", "application/json")
+			if pollHits == 1 {
+				_, _ = io.WriteString(w, `{"id":"image_task","object":"image","status":"completed"}`)
+				return
+			}
 			fmt.Fprintf(w, `{"id":"image_task","object":"image","status":"completed","detail":{"data":[{"download_url":%q}]}}`, srv.URL+"/download/generated.png")
 		case "/download/generated.png":
 			imageHits++
@@ -440,8 +444,8 @@ func TestRequestImagesAPIAsyncPollingDownloadsDetailURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pollHits != 1 {
-		t.Fatalf("pollHits = %d, want 1", pollHits)
+	if pollHits != 2 {
+		t.Fatalf("pollHits = %d, want 2", pollHits)
 	}
 	if imageHits != 1 {
 		t.Fatalf("imageHits = %d, want 1", imageHits)

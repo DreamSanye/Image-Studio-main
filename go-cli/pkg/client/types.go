@@ -24,10 +24,11 @@ const (
 
 // Tunable knobs (exposed as vars so tests can shrink them).
 var (
-	RetryBackoffSeconds          = 15
-	StatusIntervalSecond         = 10
-	ImagesTaskPollIntervalSecond = 3
-	ImagesTaskPollTimeoutSecond  = 30 * 60
+	RetryBackoffSeconds                  = 15
+	StatusIntervalSecond                 = 10
+	ImagesTaskPollIntervalSecond         = 3
+	ImagesTaskPollTimeoutSecond          = 30 * 60
+	ImagesTaskCompletedResultGraceSecond = 120
 	// Version 在构建时通过 ldflags 注入;本地未注入时回退到开发标识。
 	Version = "0.1.5"
 )
