@@ -639,7 +639,7 @@ func pollImagesTask(
 	if completedResultGrace <= 0 {
 		completedResultGrace = 2 * time.Minute
 	}
-	pollURL := baseURL + "/v1/images/" + neturl.PathEscape(taskID)
+	pollURL := imagesTaskPollURL(baseURL, taskID)
 	var lastStatus string
 	var completedWithoutResultSince time.Time
 	for attempt := 1; ; attempt++ {
@@ -720,6 +720,18 @@ func pollImagesTask(
 			return ImageResult{}, fmt.Errorf("Images API 异步任务状态未知:%s", lastStatus)
 		}
 	}
+}
+
+func imagesTaskPollURL(baseURL string, taskID string) string {
+	u := baseURL + "/v1/images/" + neturl.PathEscape(taskID)
+	parsed, err := neturl.Parse(u)
+	if err != nil {
+		return u + "?detail=true"
+	}
+	q := parsed.Query()
+	q.Set("detail", "true")
+	parsed.RawQuery = q.Encode()
+	return parsed.String()
 }
 
 func writeImagesPollRaw(rawSink io.Writer, taskID string, attempt int, raw []byte) error {

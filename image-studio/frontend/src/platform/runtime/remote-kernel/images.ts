@@ -129,6 +129,12 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+function imagesTaskPollURL(baseURL: string, taskID: string): string {
+  const url = new URL(`/v1/images/${encodeURIComponent(taskID)}`, `${normalizeBaseURL(baseURL)}/`);
+  url.searchParams.set("detail", "true");
+  return url.toString();
+}
+
 function parseImagesResponseOrTask(raw: string, status: number, allowAsyncTask: boolean): ParsedImagesResponse {
   let parsed: any;
   try {
@@ -305,7 +311,7 @@ async function pollImagesTask(
   proxyMode: "none" | "custom" | "system",
 ): Promise<{ result: ExtractedImageResult; raw: string }> {
   const deadline = Date.now() + IMAGES_TASK_POLL_TIMEOUT_MS;
-  const taskURL = `${normalizeBaseURL(request.payload.baseURL)}/v1/images/${encodeURIComponent(initialTask.id)}`;
+  const taskURL = imagesTaskPollURL(request.payload.baseURL, initialTask.id);
   let rawLog = `\n\n--- images-task-${initialTask.id}-submitted ---\n${JSON.stringify(initialTask)}\n`;
   let lastStatus = initialTask.status;
   let completedWithoutResultSince = 0;

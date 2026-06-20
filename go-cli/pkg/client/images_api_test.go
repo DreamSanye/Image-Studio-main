@@ -358,6 +358,9 @@ func TestRequestImagesAPIAsyncPolling(t *testing.T) {
 			_, _ = io.WriteString(w, `{"id":"task_abc","object":"image.generation","status":"processing"}`)
 		case "/v1/images/task_abc":
 			pollHits++
+			if r.URL.Query().Get("detail") != "true" {
+				t.Fatalf("missing detail=true query: %s", r.URL.RawQuery)
+			}
 			if pollHits == 1 {
 				_, _ = io.WriteString(w, `{"id":"task_abc","status":"processing"}`)
 				return
@@ -418,6 +421,9 @@ func TestRequestImagesAPIAsyncPollingDownloadsDetailURL(t *testing.T) {
 		case "/v1/images/image_task":
 			pollHits++
 			w.Header().Set("Content-Type", "application/json")
+			if r.URL.Query().Get("detail") != "true" {
+				t.Fatalf("missing detail=true query: %s", r.URL.RawQuery)
+			}
 			if pollHits == 1 {
 				_, _ = io.WriteString(w, `{"id":"image_task","object":"image","status":"completed"}`)
 				return
