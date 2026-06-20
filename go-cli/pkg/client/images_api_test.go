@@ -365,6 +365,9 @@ func TestRequestImagesAPIAsyncPolling(t *testing.T) {
 				_, _ = io.WriteString(w, `{"id":"task_abc","status":"processing"}`)
 				return
 			}
+			if pollHits == 2 {
+				return
+			}
 			fmt.Fprintf(w, `{"id":"task_abc","status":"completed","data":[{"b64_json":%q,"revised_prompt":"done"}]}`, finalB64)
 		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
@@ -392,13 +395,13 @@ func TestRequestImagesAPIAsyncPolling(t *testing.T) {
 	if got := requestBody["response_format"]; got != "b64_json" {
 		t.Fatalf("response_format = %#v, want b64_json", got)
 	}
-	if pollHits != 2 {
-		t.Fatalf("pollHits = %d, want 2", pollHits)
+	if pollHits != 3 {
+		t.Fatalf("pollHits = %d, want 3", pollHits)
 	}
 	if res.ImageB64 != finalB64 || res.RevisedPrompt != "done" {
 		t.Fatalf("unexpected result: %+v", res)
 	}
-	if !strings.Contains(raw.String(), "--- images-task-task_abc-poll-2 ---") {
+	if !strings.Contains(raw.String(), "--- images-task-task_abc-poll-3 ---") {
 		t.Fatalf("raw log missing poll marker: %s", raw.String())
 	}
 }

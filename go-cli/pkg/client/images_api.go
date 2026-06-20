@@ -680,6 +680,15 @@ func pollImagesTask(
 		if readErr != nil {
 			return ImageResult{}, fmt.Errorf("读取 Images API 异步任务响应失败:%w", readErr)
 		}
+		if len(bytes.TrimSpace(raw)) == 0 {
+			if resp.StatusCode/100 != 2 {
+				return ImageResult{}, fmt.Errorf("上游轮询返回 HTTP %d 空响应", resp.StatusCode)
+			}
+			if onProgress != nil {
+				onProgress("Images API 异步任务轮询返回空响应，继续等待", int(time.Since(startedAt).Seconds()), 0)
+			}
+			continue
+		}
 		var parsed imagesAPIResponse
 		if err := json.Unmarshal(raw, &parsed); err != nil {
 			if resp.StatusCode/100 != 2 {

@@ -652,6 +652,19 @@ test("runRemoteImageJob polls Images API async tasks", async () => {
         });
       }
       if (String(url).startsWith("https://upstream.example/codex/v1/images/task_abc")) {
+        const taskPolls = calls.filter((call) => call.url.startsWith("https://upstream.example/codex/v1/images/task_abc")).length;
+        if (taskPolls === 1) {
+          return new Response('{"id":"task_abc","status":"queued"}', {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (taskPolls === 2) {
+          return new Response("", {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
         return new Response('{"id":"task_abc","status":"completed","data":[{"b64_json":"async-img","revised_prompt":"async rev"}]}', {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -692,6 +705,8 @@ test("runRemoteImageJob polls Images API async tasks", async () => {
     assert.equal(calls[0].body.response_format, "b64_json");
     assert.equal("stream" in calls[0].body, false);
     assert.equal(calls[1].url, "https://upstream.example/codex/v1/images/task_abc?detail=true");
+    assert.equal(calls[2].url, "https://upstream.example/codex/v1/images/task_abc?detail=true");
+    assert.equal(calls[3].url, "https://upstream.example/codex/v1/images/task_abc?detail=true");
     assert.equal(calls[1].method, "GET");
     assert.equal(result.imageB64, "async-img");
     assert.equal(result.revisedPrompt, "async rev");

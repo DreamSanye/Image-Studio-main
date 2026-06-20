@@ -325,6 +325,13 @@ async function pollImagesTask(
     callbacks.onProgress?.(lastStatus ? `Images API 异步任务处理中:${lastStatus}` : "Images API 异步任务处理中", nowSeconds(startedAt), 0);
     const response = await requestImagesTaskStatus(taskURL, request, callbacks, proxyMode);
     rawLog += `\n\n--- images-task-${initialTask.id}-poll-${attempt} ---\n${response.raw}`;
+    if (!response.raw.trim()) {
+      if (response.status < 200 || response.status >= 300) {
+        throw new RemoteKernelError(`上游轮询返回 HTTP ${response.status} 空响应`);
+      }
+      callbacks.onProgress?.("Images API 异步任务轮询返回空响应，继续等待", nowSeconds(startedAt), 0);
+      continue;
+    }
     const parsed = parseImagesResponseOrTask(response.raw, response.status, true);
     if (parsed.result) return { result: parsed.result, raw: rawLog };
     if (parsed.imageURL) {
