@@ -463,3 +463,11 @@ func TestRequestImagesAPIAsyncPollingDownloadsDetailURL(t *testing.T) {
 		t.Fatalf("raw log missing download_url response: %s", raw.String())
 	}
 }
+
+func TestImagesTaskPollURLIncludesDetailAndBasePath(t *testing.T) {
+	got := imagesTaskPollURL("http://example.test/codex", "image task/1")
+	want := "http://example.test/codex/v1/images/image%20task%2F1?detail=true"
+	if got != want {
+		t.Fatalf("imagesTaskPollURL = %q, want %q", got, want)
+	}
+}

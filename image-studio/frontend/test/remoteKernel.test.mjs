@@ -645,13 +645,13 @@ test("runRemoteImageJob polls Images API async tasks", async () => {
         method: init.method || "GET",
         body: typeof init.body === "string" ? JSON.parse(init.body) : null,
       });
-      if (String(url).includes("/v1/images/generations")) {
+      if (String(url).includes("/codex/v1/images/generations")) {
         return new Response('{"id":"task_abc","status":"processing"}', {
           status: 200,
           headers: { "content-type": "application/json" },
         });
       }
-      if (String(url).startsWith("https://upstream.example/v1/images/task_abc")) {
+      if (String(url).startsWith("https://upstream.example/codex/v1/images/task_abc")) {
         return new Response('{"id":"task_abc","status":"completed","data":[{"b64_json":"async-img","revised_prompt":"async rev"}]}', {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -675,7 +675,7 @@ test("runRemoteImageJob polls Images API async tasks", async () => {
           maskB64: "",
           seed: 0,
           negativePrompt: "",
-          baseURL: "https://upstream.example",
+          baseURL: "https://upstream.example/codex",
           textModelID: "",
           imageModelID: "gpt-image-2",
           apiMode: "images",
@@ -687,11 +687,11 @@ test("runRemoteImageJob polls Images API async tasks", async () => {
       },
       { signal: new AbortController().signal },
     );
-    assert.equal(calls[0].url, "https://upstream.example/v1/images/generations?async=true");
+    assert.equal(calls[0].url, "https://upstream.example/codex/v1/images/generations?async=true");
     assert.equal(calls[0].body.async, true);
     assert.equal(calls[0].body.response_format, "b64_json");
     assert.equal("stream" in calls[0].body, false);
-    assert.equal(calls[1].url, "https://upstream.example/v1/images/task_abc?detail=true");
+    assert.equal(calls[1].url, "https://upstream.example/codex/v1/images/task_abc?detail=true");
     assert.equal(calls[1].method, "GET");
     assert.equal(result.imageB64, "async-img");
     assert.equal(result.revisedPrompt, "async rev");
@@ -707,14 +707,14 @@ test("runRemoteImageJob downloads Images API async detail download_url", async (
         method: init.method || "GET",
         body: typeof init.body === "string" ? JSON.parse(init.body) : null,
       });
-      if (String(url).includes("/v1/images/generations")) {
+      if (String(url).includes("/codex/v1/images/generations")) {
         return new Response('{"id":"image_task","status":"processing"}', {
           status: 200,
           headers: { "content-type": "application/json" },
         });
       }
-      if (String(url).startsWith("https://upstream.example/v1/images/image_task")) {
-        const imagePolls = calls.filter((call) => call.url.startsWith("https://upstream.example/v1/images/image_task")).length;
+      if (String(url).startsWith("https://upstream.example/codex/v1/images/image_task")) {
+        const imagePolls = calls.filter((call) => call.url.startsWith("https://upstream.example/codex/v1/images/image_task")).length;
         if (imagePolls === 1) {
           return new Response(
             '{"id":"image_task","object":"image","status":"completed"}',
@@ -750,7 +750,7 @@ test("runRemoteImageJob downloads Images API async detail download_url", async (
           maskB64: "",
           seed: 0,
           negativePrompt: "",
-          baseURL: "https://upstream.example",
+          baseURL: "https://upstream.example/codex",
           textModelID: "",
           imageModelID: "gpt-image-2",
           apiMode: "images",
@@ -762,8 +762,8 @@ test("runRemoteImageJob downloads Images API async detail download_url", async (
       },
       { signal: new AbortController().signal },
     );
-    assert.equal(calls[1].url, "https://upstream.example/v1/images/image_task?detail=true");
-    assert.equal(calls[2].url, "https://upstream.example/v1/images/image_task?detail=true");
+    assert.equal(calls[1].url, "https://upstream.example/codex/v1/images/image_task?detail=true");
+    assert.equal(calls[2].url, "https://upstream.example/codex/v1/images/image_task?detail=true");
     assert.equal(calls[3].url, "https://cdn.example/generated.png");
     assert.equal(result.imageB64, "cG5n");
     assert.equal(result.sourceEvent, "images_api");

@@ -130,7 +130,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 function imagesTaskPollURL(baseURL: string, taskID: string): string {
-  const url = new URL(`/v1/images/${encodeURIComponent(taskID)}`, `${normalizeBaseURL(baseURL)}/`);
+  const url = new URL(`v1/images/${encodeURIComponent(taskID)}`, `${normalizeBaseURL(baseURL)}/`);
   url.searchParams.set("detail", "true");
   return url.toString();
 }
