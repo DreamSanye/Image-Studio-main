@@ -668,6 +668,12 @@ test("runRemoteImageJob polls Images API async tasks", async () => {
         if (taskPolls === 3) {
           throw new Error("socket hang up");
         }
+        if (taskPolls === 4) {
+          return new Response("", {
+            status: 504,
+            headers: { "content-type": "text/plain" },
+          });
+        }
         return new Response('{"id":"task_abc","status":"completed","data":[{"b64_json":"async-img","revised_prompt":"async rev"}]}', {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -711,6 +717,7 @@ test("runRemoteImageJob polls Images API async tasks", async () => {
     assert.equal(calls[2].url, "https://upstream.example/codex/v1/images/task_abc?detail=true");
     assert.equal(calls[3].url, "https://upstream.example/codex/v1/images/task_abc?detail=true");
     assert.equal(calls[4].url, "https://upstream.example/codex/v1/images/task_abc?detail=true");
+    assert.equal(calls[5].url, "https://upstream.example/codex/v1/images/task_abc?detail=true");
     assert.equal(calls[1].method, "GET");
     assert.equal(result.imageB64, "async-img");
     assert.equal(result.revisedPrompt, "async rev");

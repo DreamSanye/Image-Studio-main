@@ -682,6 +682,12 @@ func pollImagesTask(
 		}
 		if readErr != nil {
 			if resp.StatusCode/100 != 2 {
+				if isImagesTaskTransientHTTPStatus(resp.StatusCode) {
+					if onProgress != nil {
+						onProgress(fmt.Sprintf("Images API 异步任务响应读取中断(HTTP %d)，继续等待:%s", resp.StatusCode, readErr.Error()), int(time.Since(startedAt).Seconds()), 0)
+					}
+					continue
+				}
 				return ImageResult{}, fmt.Errorf("读取 Images API 异步任务响应失败:%w", readErr)
 			}
 			if onProgress != nil {
@@ -691,6 +697,12 @@ func pollImagesTask(
 		}
 		if len(bytes.TrimSpace(raw)) == 0 {
 			if resp.StatusCode/100 != 2 {
+				if isImagesTaskTransientHTTPStatus(resp.StatusCode) {
+					if onProgress != nil {
+						onProgress(fmt.Sprintf("上游轮询返回 HTTP %d 空响应，继续等待", resp.StatusCode), int(time.Since(startedAt).Seconds()), 0)
+					}
+					continue
+				}
 				return ImageResult{}, fmt.Errorf("上游轮询返回 HTTP %d 空响应", resp.StatusCode)
 			}
 			if onProgress != nil {
@@ -701,6 +713,12 @@ func pollImagesTask(
 		var parsed imagesAPIResponse
 		if err := json.Unmarshal(raw, &parsed); err != nil {
 			if resp.StatusCode/100 != 2 {
+				if isImagesTaskTransientHTTPStatus(resp.StatusCode) {
+					if onProgress != nil {
+						onProgress(fmt.Sprintf("上游轮询返回 HTTP %d 非 JSON 响应，继续等待", resp.StatusCode), int(time.Since(startedAt).Seconds()), 0)
+					}
+					continue
+				}
 				return ImageResult{}, fmt.Errorf("上游轮询返回 HTTP %d: %s", resp.StatusCode, imagesRawPreview(raw))
 			}
 			return ImageResult{}, fmt.Errorf("解析 Images API 异步任务响应失败:%w", err)
@@ -708,6 +726,12 @@ func pollImagesTask(
 		if resp.StatusCode/100 != 2 {
 			if msg := parsed.errorMessage(); msg != "" {
 				return ImageResult{}, fmt.Errorf("上游轮询返回 %d:%s", resp.StatusCode, msg)
+			}
+			if isImagesTaskTransientHTTPStatus(resp.StatusCode) {
+				if onProgress != nil {
+					onProgress(fmt.Sprintf("上游轮询返回 HTTP %d，继续等待", resp.StatusCode), int(time.Since(startedAt).Seconds()), 0)
+				}
+				continue
 			}
 			return ImageResult{}, fmt.Errorf("上游轮询返回 HTTP %d: %s", resp.StatusCode, imagesRawPreview(raw))
 		}
@@ -737,6 +761,15 @@ func pollImagesTask(
 		if !isImagesTaskPending(lastStatus) {
 			return ImageResult{}, fmt.Errorf("Images API 异步任务状态未知:%s", lastStatus)
 		}
+	}
+}
+
+func isImagesTaskTransientHTTPStatus(status int) bool {
+	switch status {
+	case http.StatusRequestTimeout, http.StatusConflict, http.StatusTooEarly, http.StatusTooManyRequests:
+		return true
+	default:
+		return status >= 500
 	}
 }
 

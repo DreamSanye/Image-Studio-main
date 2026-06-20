@@ -112,6 +112,10 @@ function isCompletedTaskStatus(status: string): boolean {
   return ["completed", "succeeded", "success", "done"].includes(normalizeTaskStatus(status));
 }
 
+function isTransientPollHTTPStatus(status: number): boolean {
+  return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+}
+
 function firstImageDatum(parsed: any): any | null {
   if (Array.isArray(parsed?.data) && parsed.data.length > 0) return parsed.data[0];
   if (parsed?.detail && typeof parsed.detail === "object") return firstImageDatum(parsed.detail);
@@ -333,12 +337,25 @@ async function pollImagesTask(
     rawLog += `\n\n--- images-task-${initialTask.id}-poll-${attempt} ---\n${response.raw}`;
     if (!response.raw.trim()) {
       if (response.status < 200 || response.status >= 300) {
+        if (isTransientPollHTTPStatus(response.status)) {
+          callbacks.onProgress?.(`上游轮询返回 HTTP ${response.status} 空响应，继续等待`, nowSeconds(startedAt), 0);
+          continue;
+        }
         throw new RemoteKernelError(`上游轮询返回 HTTP ${response.status} 空响应`);
       }
       callbacks.onProgress?.("Images API 异步任务轮询返回空响应，继续等待", nowSeconds(startedAt), 0);
       continue;
     }
-    const parsed = parseImagesResponseOrTask(response.raw, response.status, true);
+    let parsed: ParsedImagesResponse;
+    try {
+      parsed = parseImagesResponseOrTask(response.raw, response.status, true);
+    } catch (error) {
+      if (isTransientPollHTTPStatus(response.status)) {
+        callbacks.onProgress?.(`上游轮询返回 HTTP ${response.status} 临时错误，继续等待`, nowSeconds(startedAt), 0);
+        continue;
+      }
+      throw error;
+    }
     if (parsed.result) return { result: parsed.result, raw: rawLog };
     if (parsed.imageURL) {
       callbacks.onProgress?.("下载 Images API 异步任务图片", nowSeconds(startedAt), 0);
