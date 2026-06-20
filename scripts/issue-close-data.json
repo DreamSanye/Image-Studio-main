@@ -1,0 +1,95 @@
+{
+  "updatedAt": "2026-06-07",
+  "upstreamRepo": "RoseKhlifa/Image-Studio",
+  "verificationBaseline": {
+    "summaryCommand": "IMAGE_STUDIO_INCLUDE_ISSUE_CLOSE_VERIFY=1 IMAGE_STUDIO_VERIFY_RESULTS_DIR=/private/tmp/verify-results-issue-close-final4 node scripts/verify-local-platform-kernel.mjs",
+    "summaryStatus": "passed",
+    "summarySteps": 11,
+    "frontendTests": "114/114",
+    "resultFiles": [
+      "/private/tmp/verify-results-issue-close-final4/platform-kernel-summary.json",
+      "/private/tmp/verify-results-issue-close-final4/live-verify.json",
+      "/private/tmp/verify-results-issue-close-final4/local-smoke.json",
+      "/private/tmp/verify-results-issue-close-final4/android-shell.json",
+      "/private/tmp/verify-results-issue-close-final4/macos-release.json",
+      "/private/tmp/verify-results-issue-close-final4/issue-close-tooling.json",
+      "/private/tmp/verify-results-issue-close-final4/issue-close-export-bundle/manifest.json"
+    ]
+  },
+  "closable": [
+    {
+      "number": 24,
+      "title": "支持全部删除",
+      "comment": "这个需求当前仓库已经覆盖。\n\n- 历史结果列表已支持“全部删除”。\n- 主要落点在 `image-studio/frontend/src/components/history/HistoryRail.tsx`。\n- 当前本地验证链已重新通过，2026-06-07 的 `platform-kernel` 总链状态为 `passed`。\n\n如果你这边没有新的复现条件，这个 issue 可以关闭。"
+    },
+    {
+      "number": 25,
+      "title": "上游配置升级后的同步问题",
+      "comment": "这个问题当前仓库已经做了两层处理：\n\n- 已支持上游配置导入 / 导出。\n- 兼容状态会落到宿主侧共享路径，减轻更新后重新录入配置的问题。\n\n主要落点：\n\n- `image-studio/frontend/src/lib/upstreamConfigTransfer.ts`\n- `image-studio/backend/compatibility.go`\n\n本地验证链已在 2026-06-07 重新通过。如果你这边没有新的“升级后配置丢失”复现路径，这个 issue 可以关闭。"
+    },
+    {
+      "number": 26,
+      "title": "失败重试开关",
+      "comment": "这个需求当前仓库已经覆盖。\n\n- 设置页已提供全局“失败自动重试”开关。\n- 桌面端和 Android 端都已有入口。\n\n主要落点：\n\n- `image-studio/frontend/src/components/panel/SettingsPanel.tsx`\n- `image-studio/frontend/src/platform/android/settings/AndroidSettingsPanel.tsx`\n\n当前本地验证链已重新通过。如果没有新的行为差异，这个 issue 可以关闭。"
+    },
+    {
+      "number": 27,
+      "title": "上游失败重试路由功能",
+      "comment": "这个需求当前仓库已经覆盖。\n\n- 失败重试现在可以路由到用户指定的备用上游。\n- 不是只做“原上游再试一次”，而是支持切到备用 profile。\n\n主要落点：\n\n- `go-cli/pkg/client/retry.go`\n- `image-studio/frontend/src/components/panel/UpstreamProfileEditor.tsx`\n\n本地验证链已重新通过。如果没有新的复现场景，这个 issue 可以关闭。"
+    },
+    {
+      "number": 28,
+      "title": "保存用户自定义提示词模板",
+      "comment": "这个功能当前仓库已经覆盖。\n\n已支持：\n\n- 添加提示词模板\n- 删除提示词模板\n- 修改并保存模板\n- 自定义模板标题\n- 点击模板快速填入提示词\n\n主要落点：\n\n- `image-studio/frontend/src/lib/promptTemplates.ts`\n- `image-studio/frontend/src/components/panel/PromptTemplateManagerModal.tsx`\n\n本地测试与验证链已重新通过。如果没有新的补充需求，这个 issue 可以关闭。"
+    },
+    {
+      "number": 32,
+      "title": "拖结果到文件复制",
+      "comment": "这个需求当前仓库已经覆盖。\n\n- 桌面端结果图已支持直接拖出到系统文件管理器复制。\n- 导出逻辑优先走真实结果文件 / 全尺寸媒体路径，不是只拖缩略图。\n\n主要落点：\n\n- `image-studio/backend/dialogs.go`\n- `image-studio/frontend/src/lib/dragExport.ts`\n\n本地验证链已重新通过。如果你这边没有新的拖拽失败复现，这个 issue 可以关闭。"
+    },
+    {
+      "number": 35,
+      "title": "工作区的鼠标滚动方向改为横向",
+      "comment": "这个修正当前仓库已经覆盖。\n\n- 多工作区场景下，工作区栏滚轮方向已改为横向滚动。\n\n主要落点：\n\n- `image-studio/frontend/src/components/layout/WorkspaceBar.tsx`\n\n本地测试与验证链已重新通过。如果没有新的滚动行为问题，这个 issue 可以关闭。"
+    },
+    {
+      "number": 37,
+      "title": "结果里生成的多张图片查看问题",
+      "comment": "这个需求当前仓库已经覆盖。\n\n- 当前已支持在画板里对同批生成结果做左右切换浏览。\n- 不需要再回到结果列表逐张找。\n\n主要落点：\n\n- `image-studio/frontend/src/components/canvas/useCanvasShortcuts.ts`\n- `image-studio/frontend/src/state/studioStore.media.ts`\n\n本地测试与验证链已重新通过。如果没有新的查看路径问题，这个 issue 可以关闭。"
+    },
+    {
+      "number": 40,
+      "title": "多图张数按钮选择",
+      "comment": "这个需求当前仓库已经覆盖。\n\n- Android 端多图张数选择已从滑杆改为带边界的按钮选择。\n\n主要落点：\n\n- `image-studio/frontend/src/platform/android/AndroidPhoneComposePanel.tsx`\n- `image-studio/frontend/src/platform/android/AndroidPadComposePanel.tsx`\n\n本地验证链已重新通过。如果没有新的交互差异，这个 issue 可以关闭。"
+    },
+    {
+      "number": 42,
+      "title": "一些功能需求",
+      "comment": "这个需求集合当前仓库已覆盖主要条目。\n\n已支持：\n\n1. 有参考图时，图生图默认切到 `Auto` 比例。\n2. 会根据参考图比例推导最接近的 2K / 4K 分辨率。\n3. 支持自定义提示词模板与快捷填入。\n4. 已支持结果图与参考图对比查看。\n\n主要落点：\n\n- `image-studio/frontend/src/components/panel/sizeCapabilities.ts`\n- `image-studio/frontend/src/components/panel/PromptTemplateManagerModal.tsx`\n- `image-studio/frontend/src/components/canvas/CompareOverlay.tsx`\n\n本地验证链已重新通过。如果没有新的补充项或复现场景，这个 issue 可以关闭。"
+    }
+  ],
+  "holdOpen": [
+    {
+      "number": 30,
+      "title": "[bug]窗口标题背景与标题栏颜色不一致",
+      "reason": "代码已修，但仍缺 Windows 真机视觉确认"
+    },
+    {
+      "number": 36,
+      "title": "生成图片问题：生成图片经常模糊。在多张并发期间尤为明显",
+      "reason": "核心修复已落地，但仍缺 Android / Windows 真机和真实高并发上游长链路证明"
+    }
+  ],
+  "deferred": [
+    {
+      "number": 23,
+      "title": "不生图",
+      "reason": "按当前任务约定视为上游问题，不纳入本轮收口"
+    },
+    {
+      "number": 14,
+      "title": "有web端吗",
+      "reason": "独立在线 Web 版已明确搁置"
+    }
+  ]
+}
